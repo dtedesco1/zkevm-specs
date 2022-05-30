@@ -34,6 +34,7 @@ from .table import (
     RWTableTag,
     TxLogFieldTag,
     TxReceiptFieldTag,
+    CopyDataTypeTag,
 )
 
 
@@ -901,5 +902,5 @@ class Instruction:
             dst_addr,
             length,
             rw_counter,
-            log_id
+            log_id,
         ).rwc_inc
