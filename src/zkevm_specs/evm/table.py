@@ -27,6 +27,7 @@ class FixedTableTag(IntEnum):
     BitwiseXor = auto()  # lhs, rhs, lhs ^ rhs, 0
     ResponsibleOpcode = auto()  # execution_state, opcode, aux
     Pow2 = auto()  # value, value_pow
+    CopyPairs = auto()
 
     def table_assignments(self) -> List[FixedTableRow]:
         if self == FixedTableTag.Range5:
@@ -71,6 +72,24 @@ class FixedTableTag(IntEnum):
             ]
         elif self == FixedTableTag.Pow2:
             return [FixedTableRow(FQ(self), FQ(value), FQ(1 << value)) for value in range(65)]
+        elif self == FixedTableTag.CopyPairs:
+            return [
+                FixedTableRow(FQ(self), FQ(src_type), FQ(dst_type), FQ(0))
+                for src_type, dst_type in [
+                    # calldatacopy (internal)
+                    (CopyDataTypeTag.Memory, CopyDataTypeTag.Memory),
+                    # calldatacopy (root)
+                    (CopyDataTypeTag.TxCalldata, CopyDataTypeTag.Memory),
+                    # create/create2 (root)
+                    (CopyDataTypeTag.TxCalldata, CopyDataTypeTag.Bytecode),
+                    # return/create/create2 (internal)
+                    (CopyDataTypeTag.Memory, CopyDataTypeTag.Bytecode),
+                    # codecopy/extcodecopy
+                    (CopyDataTypeTag.Bytecode, CopyDataTypeTag.Memory),
+                    # log
+                    (CopyDataTypeTag.Memory, CopyDataTypeTag.TxLog),
+                ]
+            ]
         else:
             raise ValueError("Unreacheable")
 
@@ -279,6 +298,17 @@ class TxReceiptFieldTag(IntEnum):
     LogLength = auto()
 
 
+class CopyDataTypeTag(IntEnum):
+    """
+    Tag for CopyTable that specifies the type of data source.
+    """
+
+    Bytecode = auto()
+    Memory = auto()
+    TxCalldata = auto()
+    TxLog = auto()
+
+
 class WrongQueryKey(Exception):
     def __init__(self, table_name: str, diff: Set[str]) -> None:
         self.message = f"Lookup {table_name} with invalid keys {diff}"
@@ -366,6 +396,43 @@ class MPTTableRow(TableRow):
     value_prev: Expression
 
 
+@dataclass
+class CopyCircuitRow(TableRow):
+    q_step: FQ
+    is_first: FQ
+    is_last: FQ
+    id: FQ  # one of call_id, bytecode_hash, tx_id
+    log_id: FQ  # only used in TxLog
+    tag: FQ  # CopyDataTypeTag
+    addr: FQ
+    src_addr_boundary: FQ
+    bytes_left: FQ
+    value: FQ
+    is_code: FQ
+    is_pad: FQ
+    rw_counter: FQ
+    rwc_inc_left: FQ
+    is_memory: FQ
+    is_bytecode: FQ
+    is_tx_calldata: FQ
+    is_tx_log: FQ
+
+
+@dataclass(frozen=True)
+class CopyTableRow(TableRow):
+    src_id: FQ
+    src_type: FQ
+    dst_id: FQ
+    dst_type: FQ
+    src_addr: FQ
+    src_addr_boundary: FQ
+    dst_addr: FQ
+    length: FQ
+    rw_counter: FQ
+    rwc_inc: FQ
+    log_id: FQ = field(default=FQ(0))
+
+
 class Tables:
     """
     A collection of lookup tables used in EVM circuit.
@@ -376,6 +443,7 @@ class Tables:
     tx_table: Set[TxTableRow]
     bytecode_table: Set[BytecodeTableRow]
     rw_table: Set[RWTableRow]
+    copy_table: Set[CopyTableRow]
 
     def __init__(
         self,
@@ -383,6 +451,7 @@ class Tables:
         tx_table: Set[TxTableRow],
         bytecode_table: Set[BytecodeTableRow],
         rw_table: Union[Set[Sequence[Expression]], Set[RWTableRow]],
+        copy_circuit: Sequence[CopyCircuitRow] = None,
     ) -> None:
         self.block_table = block_table
         self.tx_table = tx_table
@@ -391,6 +460,33 @@ class Tables:
             row if isinstance(row, RWTableRow) else RWTableRow(*row)  # type: ignore  # (RWTableRow input args)
             for row in rw_table
         )
+        if copy_circuit is not None:
+            self.copy_table = self._convert_copy_circuit_to_table(copy_circuit)
+
+    def _convert_copy_circuit_to_table(self, copy_circuit: Sequence[CopyCircuitRow]):
+        rows = []
+        for i, row in enumerate(copy_circuit):
+            if row.is_first != 1:
+                continue
+            assert i + 1 < len(copy_circuit), "Not enough rows in copy circuit"
+            next_row = copy_circuit[i + 1]
+            assert next_row.q_step == 0, "Invalid copy circuit"
+            rows.append(
+                CopyTableRow(
+                    src_id=row.id,
+                    src_type=row.tag,
+                    dst_id=next_row.id,
+                    dst_type=next_row.tag,
+                    src_addr=row.addr,
+                    src_addr_boundary=row.src_addr_boundary,
+                    dst_addr=next_row.addr,
+                    length=row.bytes_left,
+                    rw_counter=row.rw_counter,
+                    rwc_inc=row.rwc_inc_left,
+                    log_id=next_row.log_id,
+                )
+            )
+        return set(rows)
 
     def fixed_lookup(
         self,
@@ -467,6 +563,33 @@ class Tables:
             "aux0": aux0,
         }
         return lookup(RWTableRow, self.rw_table, query)
+
+    def copy_lookup(
+        self,
+        src_id: Expression,
+        src_type: Expression,
+        dst_id: Expression,
+        dst_type: Expression,
+        src_addr: Expression,
+        src_addr_boundary: Expression,
+        dst_addr: Expression,
+        length: Expression,
+        rw_counter: Expression,
+        log_id: Expression = None,
+    ) -> CopyTableRow:
+        query = {
+            "src_id": src_id,
+            "src_type": src_type,
+            "dst_id": dst_id,
+            "dst_type": dst_type,
+            "src_addr": src_addr,
+            "src_addr_boundary": src_addr_boundary,
+            "dst_addr": dst_addr,
+            "length": length,
+            "rw_counter": rw_counter,
+            "log_id": log_id,
+        }
+        return lookup(CopyTableRow, self.copy_table, query)
 
 
 T = TypeVar("T", bound=TableRow)
