@@ -35,6 +35,7 @@ from .extcodehash import *
 from .log import *
 from .shr import *
 from .stop import *
+from .return_ import *
 
 
 EXECUTION_STATE_IMPL: Dict[ExecutionState, Callable] = {
@@ -69,4 +70,5 @@ EXECUTION_STATE_IMPL: Dict[ExecutionState, Callable] = {
     ExecutionState.ISZERO: iszero,
     ExecutionState.SHR: shr,
     ExecutionState.STOP: stop,
+    ExecutionState.RETURN: return_,
 }

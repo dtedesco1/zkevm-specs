@@ -266,6 +266,7 @@ class Instruction:
             (CallContextFieldTag.LastCalleeReturnDataOffset, return_data_offset),
             (CallContextFieldTag.LastCalleeReturnDataLength, return_data_length),
         ]:
+            # print(f'Tag: {field_tag}')
             self.constrain_equal(
                 self.call_context_lookup(field_tag, RW.Write, call_id=caller_id),
                 expected_value,
@@ -928,6 +929,8 @@ class Instruction:
             cd_offset.expr() + cd_length.expr() + FQ(31), FQ(32), N_BYTES_MEMORY_SIZE
         )
         next_memory_size = self.max(self.curr.memory_size, cd_memory_size, N_BYTES_MEMORY_SIZE)
+        print(0, self.curr.memory_size)
+        print(1, next_memory_size)
 
         if rd_offset is not None and rd_length is not None:
             rd_memory_size, _ = self.constant_divmod(
