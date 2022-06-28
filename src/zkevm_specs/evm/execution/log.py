@@ -103,4 +103,3 @@ def log(instruction: Instruction):
         memory_size=Transition.to(next_memory_size),
         log_id=Transition.delta(is_persistent),
     )
-

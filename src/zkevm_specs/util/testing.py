@@ -24,11 +24,9 @@ def memory_expansion(
 ) -> Tuple[U64, U128]:
     # The memory size required for the used address
     address_memory_size = memory_word_size(address)
-    print('A', address_memory_size)
 
     # Expand the memory if needed
     next_memory_size = max(address_memory_size, curr_memory_size)
-    print('B', next_memory_size)
 
     # Calculate the quad memory cost
     (curr_quad_memory_cost, _) = div(U256(curr_memory_size * curr_memory_size), U64(512))
@@ -39,7 +37,6 @@ def memory_expansion(
     memory_gas_cost = (next_memory_size - curr_memory_size) * MEMORY_EXPANSION_LINEAR_COEFF + (
         next_quad_memory_cost - curr_quad_memory_cost
     )
-    print('C', memory_gas_cost, (next_memory_size - curr_memory_size) * MEMORY_EXPANSION_LINEAR_COEFF)
 
     # Return the new memory size and the memory expansion gas cost
     return (next_memory_size, U128(memory_gas_cost))

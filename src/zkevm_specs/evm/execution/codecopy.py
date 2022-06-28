@@ -46,4 +46,3 @@ def codecopy(instruction: Instruction):
         memory_size=Transition.to(next_memory_size),
         dynamic_gas_cost=gas_cost,
     )
-

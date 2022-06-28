@@ -1,4 +1,3 @@
-from pprint import pprint
 import pytest
 from collections import namedtuple
 from itertools import chain
@@ -21,6 +20,7 @@ from zkevm_specs.util import rand_fq, RLC, memory_expansion
 
 CALLEE_MEMORY = [0x00] * 4 + [0x22] * 32
 
+
 def gen_return_bytecode(return_offset: int, return_length: int) -> Bytecode:
     """Generate a return bytecode that has 64 bytes of memory initialized and
     returns with offset `return_offset` and length `return_length`"""
@@ -33,6 +33,7 @@ def gen_return_bytecode(return_offset: int, return_length: int) -> Bytecode:
         .push(return_offset, n_bytes=1)
         .return_()
     )
+
 
 TESTING_DATA_IS_ROOT_NOT_CREATE = (
     (Transaction(), 4, 10),  # No memory expansion
@@ -71,7 +72,6 @@ def test_return_is_root_not_create(tx: Transaction, return_offset: int, return_l
             .rws
         ),
     )
-    # pprint(tables.rw_table)
 
     verify_steps(
         randomness=randomness,
@@ -96,6 +96,7 @@ def test_return_is_root_not_create(tx: Transaction, return_offset: int, return_l
             ),
         ],
     )
+
 
 # TODO: test_return_is_root_is_create
 # TODO: test_return_not_root_is_create
@@ -122,8 +123,12 @@ TESTING_DATA_NOT_ROOT_NOT_CREATE = (
 )
 
 
-@pytest.mark.parametrize("caller_ctx, return_offset, return_length", TESTING_DATA_NOT_ROOT_NOT_CREATE)
-def test_return_not_root_not_create(caller_ctx: CallContext, return_offset: int, return_length: int):
+@pytest.mark.parametrize(
+    "caller_ctx, return_offset, return_length", TESTING_DATA_NOT_ROOT_NOT_CREATE
+)
+def test_return_not_root_not_create(
+    caller_ctx: CallContext, return_offset: int, return_length: int
+):
     randomness = rand_fq()
 
     return_offset_rlc = RLC(return_offset, randomness)
@@ -135,11 +140,12 @@ def test_return_not_root_not_create(caller_ctx: CallContext, return_offset: int,
     callee_id = 24
     caller_return_offset = 1
     caller_return_length = 10
-    caller_bytecode = Bytecode().call(0, 0xFF, 0, 0, 0, caller_return_offset, caller_return_length).stop()
+    caller_bytecode = (
+        Bytecode().call(0, 0xFF, 0, 0, 0, caller_return_offset, caller_return_length).stop()
+    )
     caller_bytecode_hash = RLC(caller_bytecode.hash(), randomness)
     callee_bytecode_hash = RLC(callee_bytecode.hash(), randomness)
     _, return_gas_cost = memory_expansion(2, return_offset + return_length)
-    # print(f'+ return_gas_cost: {return_gas_cost} (64 -> {return_offset + return_length})')
     gas_left = 400
     callee_reversible_write_counter = 2
 
@@ -198,8 +204,6 @@ def test_return_not_root_not_create(caller_ctx: CallContext, return_offset: int,
         rw_table=set(rw_dict.rws),
         copy_circuit=copy_circuit.rows,
     )
-    # pprint(tables.copy_table)
-    # pprint(tables.rw_table)
 
     verify_copy_table(copy_circuit, tables)
 
@@ -236,4 +240,3 @@ def test_return_not_root_not_create(caller_ctx: CallContext, return_offset: int,
             ),
         ],
     )
-
